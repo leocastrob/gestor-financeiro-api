@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "node --test test/**/*.test.js",
-    "start": "fastify start -l info app.js",
-    "dev": "fastify start -w -l info -P app.js"
+    "start": "fastify start -l info -a 0.0.0.0 app.js",
+    "dev": "fastify start -w -l info -P -a 0.0.0.0 app.js"
   },
   "repository": {
     "type": "git",
