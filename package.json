@@ -24,6 +24,7 @@
   "homepage": "https://github.com/leocastrob/gestor-financeiro-api#readme",
   "dependencies": {
     "@fastify/autoload": "^6.0.0",
+    "@fastify/cors": "^11.2.0",
     "@fastify/sensible": "^6.0.0",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "fastify": "^5.0.0",

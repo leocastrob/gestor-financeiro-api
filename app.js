@@ -2,14 +2,18 @@
 
 const path = require('node:path')
 const AutoLoad = require('@fastify/autoload')
+const cors = require('@fastify/cors')
 
 // Pass --options via CLI arguments in command to enable these options.
 const options = {}
 
 module.exports = async function (fastify, opts) {
   // Place here your custom code!
-
   // Do not touch the following lines
+
+  fastify.register(cors, {
+    origin: '*'
+  })
 
   // This loads all plugins defined in plugins
   // those should be support plugins that are reused
