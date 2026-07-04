@@ -43,11 +43,12 @@ module.exports = fp(async function (fastify, opts) {
 
                 if (valorBruto && descricao) {
                     const valorNumerico = parseFloat(valorBruto.replace(',', '.'))
+                    const telefone = remetente.replace('@s.whatsapp.net', '')
 
                     try {
                         // Usando o pool de conexões do Fastify
-                        await fastify.db.query('INSERT INTO gastos (descricao, valor) VALUES (?, ?)', [descricao, valorNumerico])
-                        await sock.sendMessage(remetente, { text: `✅ Salvo!\n🛒 Ref: ${descricao}\n💰 Valor: R$ ${valorNumerico}` })
+                        await fastify.db.query('INSERT INTO gastos (telefone, descricao, valor) VALUES (?, ?, ?)', [telefone, descricao, valorNumerico])
+                        await sock.sendMessage(remetente, { text: `✅ Salvo!\n📱 Nº: ${telefone}\n🛒 Ref: ${descricao}\n💰 Valor: R$ ${valorNumerico}` })
                     } catch (erro) {
                         fastify.log.error('Erro no DB:', erro)
                         await sock.sendMessage(remetente, { text: `❌ Erro interno no banco.` })
