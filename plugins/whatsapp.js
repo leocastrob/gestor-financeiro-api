@@ -15,6 +15,33 @@ module.exports = fp(async function (fastify, opts) {
             logger: pino({ level: 'silent' })
         })
 
+        // Mapa que converte LID (Linked Identity) → número de telefone real
+        // O Baileys v7 usa LID em vez do telefone em mensagens multi-device
+        const lidParaTelefone = {}
+
+        // Quando os contatos sincronizam, o Baileys nos dá o mapa LID ↔ telefone
+        sock.ev.on('contacts.update', (contatos) => {
+            for (const contato of contatos) {
+                if (contato.id && contato.lid) {
+                    const lid = contato.lid.split('@')[0]
+                    const telefone = contato.id.split('@')[0]
+                    lidParaTelefone[lid] = telefone
+                    fastify.log.info(`📇 Mapeado: LID ${lid} → Tel ${telefone}`)
+                }
+            }
+        })
+
+        sock.ev.on('contacts.upsert', (contatos) => {
+            for (const contato of contatos) {
+                if (contato.id && contato.lid) {
+                    const lid = contato.lid.split('@')[0]
+                    const telefone = contato.id.split('@')[0]
+                    lidParaTelefone[lid] = telefone
+                    fastify.log.info(`📇 Mapeado: LID ${lid} → Tel ${telefone}`)
+                }
+            }
+        })
+
         sock.ev.on('connection.update', (update) => {
             const { connection, lastDisconnect, qr } = update
             if (qr) qrcode.generate(qr, { small: true })
@@ -43,7 +70,14 @@ module.exports = fp(async function (fastify, opts) {
 
                 if (valorBruto && descricao) {
                     const valorNumerico = parseFloat(valorBruto.replace(',', '.'))
-                    const telefone = remetente.replace('@s.whatsapp.net', '')
+
+                    // Extrai o identificador (remove @s.whatsapp.net, @lid, etc)
+                    let telefone = remetente.split('@')[0]
+
+                    // Se for um LID, tenta converter para o telefone real
+                    if (remetente.endsWith('@lid') && lidParaTelefone[telefone]) {
+                        telefone = lidParaTelefone[telefone]
+                    }
 
                     try {
                         // Usando o pool de conexões do Fastify
