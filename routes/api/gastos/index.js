@@ -13,14 +13,23 @@ module.exports = async function (fastify, opts) {
     })
 
     // Essa rota vai responder em: GET /api/gastos/:telefone
-    // Filtra os gastos de um número de telefone específico
+    // Filtra os gastos de um número de telefone específico e, opcionalmente, por mês e ano
     fastify.get('/:telefone', async function (request, reply) {
         const { telefone } = request.params
+        const { mes, ano } = request.query || {}
+
+        let sqlQuery = 'SELECT * FROM gastos WHERE telefone = ?'
+        const queryParams = [telefone]
+
+        if (mes && ano) {
+            sqlQuery += ' AND MONTH(data) = ? AND YEAR(data) = ?'
+            queryParams.push(mes, ano)
+        }
+
+        sqlQuery += ' ORDER BY data DESC'
+
         try {
-            const [linhas] = await fastify.db.query(
-                'SELECT * FROM gastos WHERE telefone = ? ORDER BY data DESC',
-                [telefone]
-            )
+            const [linhas] = await fastify.db.query(sqlQuery, queryParams)
             return linhas
         } catch (erro) {
             fastify.log.error(erro)
