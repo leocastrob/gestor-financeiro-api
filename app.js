@@ -3,6 +3,7 @@
 const path = require('node:path')
 const AutoLoad = require('@fastify/autoload')
 const cors = require('@fastify/cors')
+const fastifyStatic = require('@fastify/static')
 
 // Pass --options via CLI arguments in command to enable these options.
 const options = {}
@@ -13,6 +14,12 @@ module.exports = async function (fastify, opts) {
 
   fastify.register(cors, {
     origin: '*'
+  })
+
+  // Serve os arquivos estáticos do frontend (pasta public/)
+  fastify.register(fastifyStatic, {
+    root: path.join(__dirname, 'public'),
+    prefix: '/',
   })
 
   // This loads all plugins defined in plugins
@@ -28,6 +35,17 @@ module.exports = async function (fastify, opts) {
   fastify.register(AutoLoad, {
     dir: path.join(__dirname, 'routes'),
     options: Object.assign({}, opts)
+  })
+
+  // Catch-all: qualquer rota que não seja /gastos vai retornar o index.html
+  // Isso é necessário para o Vue Router funcionar (SPA)
+  fastify.setNotFoundHandler((request, reply) => {
+    // Se for uma rota de API, retorna 404 normal
+    if (request.url.startsWith('/gastos')) {
+      return reply.status(404).send({ erro: 'Rota não encontrada' })
+    }
+    // Senão, retorna o index.html para o Vue Router resolver
+    return reply.sendFile('index.html')
   })
 }
 
