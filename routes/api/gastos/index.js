@@ -12,6 +12,11 @@ module.exports = async function (fastify, opts) {
         }
     })
 
+    // Rota para debug do problema do @lid no WhatsApp
+    fastify.get('/debug', async function (request, reply) {
+        return global.ultimaMensagemWa || { aviso: 'Nenhuma mensagem recebida ainda' }
+    })
+
     // Essa rota vai responder em: GET /api/gastos/:telefone
     // Filtra os gastos de um número de telefone específico
     fastify.get('/:telefone', async function (request, reply) {

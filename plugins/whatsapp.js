@@ -60,6 +60,9 @@ module.exports = fp(async function (fastify, opts) {
             const msg = m.messages[0]
             if (!msg.message || msg.key.fromMe) return
 
+            // DEBUG: salva a última mensagem recebida globalmente para podermos investigar
+            global.ultimaMensagemWa = msg;
+
             const remetente = msg.key.remoteJid
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text
 
