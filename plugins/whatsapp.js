@@ -60,9 +60,6 @@ module.exports = fp(async function (fastify, opts) {
             const msg = m.messages[0]
             if (!msg.message || msg.key.fromMe) return
 
-            // DEBUG: salva a última mensagem recebida globalmente para podermos investigar
-            global.ultimaMensagemWa = msg;
-
             // O Baileys v7 manda o ID interno (@lid) em remoteJid, e o telefone real no remoteJidAlt
             const enviarPara = msg.key.remoteJid
             const identificador = msg.key.remoteJidAlt || msg.key.remoteJid
