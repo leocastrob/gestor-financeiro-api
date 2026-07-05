@@ -73,6 +73,24 @@ module.exports = fp(async function (fastify, opts) {
                 if (valorBruto && descricao) {
                     const valorNumerico = parseFloat(valorBruto.replace(',', '.'))
 
+                    // NLP Simples: Descobrindo a Categoria
+                    const descricaoLower = descricao.toLowerCase()
+                    let categoria = 'Outros'
+                    
+                    if (descricaoLower.match(/ifood|mercado|padaria|comida|lanche|pizza|hamburguer/)) {
+                        categoria = 'Alimentação'
+                    } else if (descricaoLower.match(/uber|99|gasolina|posto|onibus|metro/)) {
+                        categoria = 'Transporte'
+                    } else if (descricaoLower.match(/netflix|spotify|cinema|jogo|festa/)) {
+                        categoria = 'Lazer'
+                    } else if (descricaoLower.match(/remedio|farmacia|medico|saude/)) {
+                        categoria = 'Saúde'
+                    } else if (descricaoLower.match(/luz|agua|internet|aluguel|condominio/)) {
+                        categoria = 'Moradia'
+                    } else if (descricaoLower.match(/pet|racao|veterinario|cachorro|gato/)) {
+                        categoria = 'Pets'
+                    }
+
                     // Extrai o telefone real (do remoteJidAlt)
                     let telefone = identificador.split('@')[0]
 
@@ -82,9 +100,14 @@ module.exports = fp(async function (fastify, opts) {
                     }
 
                     try {
-                        // Usando o pool de conexões do Fastify
-                        await fastify.db.query('INSERT INTO gastos (telefone, descricao, valor) VALUES (?, ?, ?)', [telefone, descricao, valorNumerico])
-                        await sock.sendMessage(enviarPara, { text: `✅ Salvo!\n📱 Nº: ${telefone}\n🛒 Ref: ${descricao}\n💰 Valor: R$ ${valorNumerico}` })
+                        // Usando o pool de conexões do Fastify (agora inclui a Categoria)
+                        await fastify.db.query(
+                            'INSERT INTO gastos (telefone, descricao, valor, categoria) VALUES (?, ?, ?, ?)', 
+                            [telefone, descricao, valorNumerico, categoria]
+                        )
+                        await sock.sendMessage(enviarPara, { 
+                            text: `✅ Salvo!\n📱 Nº: ${telefone}\n🛒 Ref: ${descricao}\n🏷️ Cat: ${categoria}\n💰 Valor: R$ ${valorNumerico}` 
+                        })
                     } catch (erro) {
                         fastify.log.error('Erro no DB:', erro)
                         await sock.sendMessage(enviarPara, { text: `❌ Erro interno no banco.` })
