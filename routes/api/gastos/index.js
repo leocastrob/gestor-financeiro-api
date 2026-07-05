@@ -27,4 +27,30 @@ module.exports = async function (fastify, opts) {
             return reply.status(500).send({ erro: 'Falha ao buscar gastos.' })
         }
     })
+
+    // Rota para deletar um gasto específico (exige que o telefone pertença àquele gasto)
+    fastify.delete('/:id', async function (request, reply) {
+        const { id } = request.params
+        const { telefone } = request.body
+
+        if (!telefone) {
+            return reply.status(400).send({ erro: 'Telefone é obrigatório para exclusão.' })
+        }
+
+        try {
+            const [resultado] = await fastify.db.query(
+                'DELETE FROM gastos WHERE id = ? AND telefone = ?',
+                [id, telefone]
+            )
+
+            if (resultado.affectedRows === 0) {
+                return reply.status(404).send({ erro: 'Gasto não encontrado ou não pertence a este número.' })
+            }
+
+            return { sucesso: true, mensagem: 'Gasto excluído com sucesso.' }
+        } catch (erro) {
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao excluir o gasto.' })
+        }
+    })
 }
