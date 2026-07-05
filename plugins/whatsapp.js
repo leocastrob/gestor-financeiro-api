@@ -63,7 +63,9 @@ module.exports = fp(async function (fastify, opts) {
             // DEBUG: salva a última mensagem recebida globalmente para podermos investigar
             global.ultimaMensagemWa = msg;
 
-            const remetente = msg.key.remoteJid
+            // O Baileys v7 manda o ID interno (@lid) em remoteJid, e o telefone real no remoteJidAlt
+            const enviarPara = msg.key.remoteJid
+            const identificador = msg.key.remoteJidAlt || msg.key.remoteJid
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text
 
             if (texto) {
@@ -74,21 +76,21 @@ module.exports = fp(async function (fastify, opts) {
                 if (valorBruto && descricao) {
                     const valorNumerico = parseFloat(valorBruto.replace(',', '.'))
 
-                    // Extrai o identificador (remove @s.whatsapp.net, @lid, etc)
-                    let telefone = remetente.split('@')[0]
+                    // Extrai o telefone real (do remoteJidAlt)
+                    let telefone = identificador.split('@')[0]
 
-                    // Se for um LID, tenta converter para o telefone real
-                    if (remetente.endsWith('@lid') && lidParaTelefone[telefone]) {
+                    // Se por algum motivo não veio o JidAlt e ainda for LID, tenta no mapa
+                    if (telefone.endsWith('@lid') && lidParaTelefone[telefone]) {
                         telefone = lidParaTelefone[telefone]
                     }
 
                     try {
                         // Usando o pool de conexões do Fastify
                         await fastify.db.query('INSERT INTO gastos (telefone, descricao, valor) VALUES (?, ?, ?)', [telefone, descricao, valorNumerico])
-                        await sock.sendMessage(remetente, { text: `✅ Salvo!\n📱 Nº: ${telefone}\n🛒 Ref: ${descricao}\n💰 Valor: R$ ${valorNumerico}` })
+                        await sock.sendMessage(enviarPara, { text: `✅ Salvo!\n📱 Nº: ${telefone}\n🛒 Ref: ${descricao}\n💰 Valor: R$ ${valorNumerico}` })
                     } catch (erro) {
                         fastify.log.error('Erro no DB:', erro)
-                        await sock.sendMessage(remetente, { text: `❌ Erro interno no banco.` })
+                        await sock.sendMessage(enviarPara, { text: `❌ Erro interno no banco.` })
                     }
                 }
             }
