@@ -1,0 +1,1 @@
+var e=`/logogestor.png`;export{e as t};
