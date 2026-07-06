@@ -37,11 +37,11 @@ module.exports = async function (fastify, opts) {
     options: Object.assign({}, opts)
   })
 
-  // Catch-all: qualquer rota que não seja /gastos vai retornar o index.html
+  // Catch-all: qualquer rota não encontrada que não seja da API vai retornar o index.html
   // Isso é necessário para o Vue Router funcionar (SPA)
   fastify.setNotFoundHandler((request, reply) => {
     // Se for uma rota de API, retorna 404 normal
-    if (request.url.startsWith('/gastos')) {
+    if (request.url.startsWith('/api')) {
       return reply.status(404).send({ erro: 'Rota não encontrada' })
     }
     // Senão, retorna o index.html para o Vue Router resolver
