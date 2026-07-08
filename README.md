@@ -35,6 +35,8 @@ Os testes mockam `fastify.db` — não é necessário um banco real rodando. O p
 
 Deploy é feito via `git push prod main` (repositório bare no servidor Termux). Veja o fluxo completo documentado em `../PROJETO.md`.
 
+**Importante:** o `.env` nunca é enviado pelo deploy (está no `.gitignore`, de propósito). O servidor precisa ter seu próprio `.env` criado manualmente uma única vez, direto na pasta do projeto (`~/gestor-financeiro/.env`), com as credenciais reais do banco. Sem isso, a API sobe mas todas as rotas que usam o banco retornam 500 ("No database selected") — já aconteceu uma vez, é o motivo desta nota.
+
 ## Backup do banco
 
 ```
