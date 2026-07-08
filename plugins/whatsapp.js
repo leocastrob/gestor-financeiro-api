@@ -3,6 +3,7 @@ const fp = require('fastify-plugin')
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
 const qrcode = require('qrcode-terminal')
 const pino = require('pino')
+const { categorizar } = require('../lib/categorizar')
 
 module.exports = fp(async function (fastify, opts) {
 
@@ -72,24 +73,7 @@ module.exports = fp(async function (fastify, opts) {
 
                 if (valorBruto && descricao) {
                     const valorNumerico = parseFloat(valorBruto.replace(',', '.'))
-
-                    // NLP Simples: Descobrindo a Categoria
-                    const descricaoLower = descricao.toLowerCase()
-                    let categoria = 'Outros'
-                    
-                    if (descricaoLower.match(/ifood|mercado|padaria|comida|lanche|pizza|hamburguer/)) {
-                        categoria = 'Alimentação'
-                    } else if (descricaoLower.match(/uber|99|gasolina|posto|onibus|metro/)) {
-                        categoria = 'Transporte'
-                    } else if (descricaoLower.match(/netflix|spotify|cinema|jogo|festa/)) {
-                        categoria = 'Lazer'
-                    } else if (descricaoLower.match(/remedio|farmacia|medico|saude/)) {
-                        categoria = 'Saúde'
-                    } else if (descricaoLower.match(/luz|agua|internet|aluguel|condominio/)) {
-                        categoria = 'Moradia'
-                    } else if (descricaoLower.match(/pet|racao|veterinario|cachorro|gato/)) {
-                        categoria = 'Pets'
-                    }
+                    const categoria = categorizar(descricao)
 
                     // Extrai o telefone real (do remoteJidAlt)
                     let telefone = identificador.split('@')[0]
@@ -117,5 +101,8 @@ module.exports = fp(async function (fastify, opts) {
         })
     }
 
-    connectToWhatsApp()
+    // Não conecta ao WhatsApp de verdade durante os testes automatizados
+    if (process.env.NODE_ENV !== 'test') {
+        connectToWhatsApp()
+    }
 })

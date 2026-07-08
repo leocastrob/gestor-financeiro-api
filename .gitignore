@@ -62,3 +62,6 @@ auth_info/
 
 # Variáveis de ambiente
 .env
+
+# Backups locais do banco (gerados por scripts/backup.sh)
+backups/

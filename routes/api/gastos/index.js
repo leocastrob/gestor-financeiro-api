@@ -1,17 +1,6 @@
 'use strict'
 
 module.exports = async function (fastify, opts) {
-    // Essa rota vai responder em: GET /api/gastos/
-    fastify.get('/', async function (request, reply) {
-        try {
-            const [linhas] = await fastify.db.query('SELECT * FROM gastos ORDER BY data DESC')
-            return linhas
-        } catch (erro) {
-            fastify.log.error(erro)
-            return reply.status(500).send({ erro: 'Falha ao buscar gastos.' })
-        }
-    })
-
     // Essa rota vai responder em: GET /api/gastos/:telefone
     // Filtra os gastos de um número de telefone específico e, opcionalmente, por mês e ano
     fastify.get('/:telefone', async function (request, reply) {
