@@ -1,29 +1,30 @@
 -- Schema do banco "financas" — gestor-financeiro-api
 --
--- Este arquivo foi reconstruído a partir do uso das colunas no código-fonte
--- (plugins/whatsapp.js e routes/api/gastos/index.js), já que o banco original
--- não tinha nenhum schema versionado. Antes de confiar 100% nele, recomenda-se
--- validar contra o banco real do servidor rodando:
---   SHOW CREATE TABLE gastos;
--- e ajustar este arquivo se houver diferenças (tamanhos de campo, índices etc.).
+-- Extraído diretamente do servidor de produção (Moto G6 Plus, MariaDB 12.3.2)
+-- via `SHOW CREATE TABLE gastos` em 2026-07-07. Reflete o schema real, não uma
+-- suposição — se o schema mudar no servidor, regenere este arquivo com o
+-- mesmo comando e atualize aqui.
 
 CREATE DATABASE IF NOT EXISTS financas
   CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
+  COLLATE utf8mb4_uca1400_ai_ci;
 
 USE financas;
 
 CREATE TABLE IF NOT EXISTS gastos (
-  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  telefone   VARCHAR(20)   NOT NULL,
-  descricao  VARCHAR(255)  NOT NULL,
-  valor      DECIMAL(10,2) NOT NULL,
-  categoria  VARCHAR(50)   NOT NULL DEFAULT 'Outros',
-  data       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_telefone (telefone),
-  KEY idx_data (data)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  id        INT(11)       NOT NULL AUTO_INCREMENT,
+  telefone  VARCHAR(30)   NOT NULL DEFAULT '',
+  descricao VARCHAR(255)  DEFAULT NULL,
+  categoria VARCHAR(50)   NOT NULL DEFAULT 'Outros',
+  valor     DECIMAL(10,2) DEFAULT NULL,
+  data      TIMESTAMP     NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+-- Observação: não existem índices além da chave primária — consultas por
+-- telefone (routes/api/gastos/index.js) e por mês/ano fazem full table scan.
+-- Hoje (18 registros) é irrelevante; ver MELHORIAS.md para quando adicionar
+-- índices em `telefone` e `data`.
 
 -- Como recriar o banco do zero em outro ambiente/celular:
 --   mysql -u root -p < schema.sql
