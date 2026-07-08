@@ -1,8 +1,45 @@
 'use strict'
 
-const { CATEGORIAS_VALIDAS } = require('../../../lib/categorizar')
+const { categorizar, CATEGORIAS_VALIDAS } = require('../../../lib/categorizar')
 
 module.exports = async function (fastify, opts) {
+    // Rota para criar um gasto direto pelo portal (o WhatsApp continua sendo o outro caminho).
+    // Se a categoria não vier informada, categoriza automaticamente (mesma lógica do bot).
+    fastify.post('/', async function (request, reply) {
+        const { telefone, descricao, valor, categoria } = request.body || {}
+
+        if (!telefone) {
+            return reply.status(400).send({ erro: 'Telefone é obrigatório.' })
+        }
+
+        if (!descricao || !descricao.trim()) {
+            return reply.status(400).send({ erro: 'Descrição é obrigatória.' })
+        }
+
+        const valorNumerico = Number(valor)
+        if (!valor || Number.isNaN(valorNumerico) || valorNumerico <= 0) {
+            return reply.status(400).send({ erro: 'Valor precisa ser um número maior que zero.' })
+        }
+
+        if (categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
+            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        }
+
+        const categoriaFinal = categoria || categorizar(descricao)
+
+        try {
+            const [resultado] = await fastify.db.query(
+                'INSERT INTO gastos (telefone, descricao, valor, categoria) VALUES (?, ?, ?, ?)',
+                [telefone, descricao.trim(), valorNumerico, categoriaFinal]
+            )
+            const [linhas] = await fastify.db.query('SELECT * FROM gastos WHERE id = ?', [resultado.insertId])
+            return reply.status(201).send(linhas[0])
+        } catch (erro) {
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao criar o gasto.' })
+        }
+    })
+
     // Essa rota vai responder em: GET /api/gastos/:telefone
     // Filtra os gastos de um número de telefone específico e, opcionalmente, por mês e ano
     fastify.get('/:telefone', async function (request, reply) {
