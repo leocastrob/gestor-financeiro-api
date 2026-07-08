@@ -56,3 +56,9 @@ profile-*
 profile*
 *clinic*
 *flamegraph*
+
+# Sessão de autenticação do WhatsApp (Baileys) — dados sensíveis, nunca versionar
+auth_info/
+
+# Variáveis de ambiente
+.env

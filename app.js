@@ -1,5 +1,7 @@
 'use strict'
 
+require('dotenv').config()
+
 const path = require('node:path')
 const AutoLoad = require('@fastify/autoload')
 const cors = require('@fastify/cors')

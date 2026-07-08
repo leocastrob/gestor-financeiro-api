@@ -5,10 +5,11 @@ const mysql = require('mysql2/promise')
 module.exports = fp(async function (fastify, opts) {
     // Cria um pool de conexões (melhor performance que createConnection)
     const pool = mysql.createPool({
-        host: 'localhost',
-        user: 'root',
-        password: '',
-        database: 'financas',
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT) || 3306,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0
