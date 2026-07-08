@@ -25,3 +25,8 @@ test('cai em Outros quando não reconhece nenhuma palavra-chave', () => {
     assert.strictEqual(categorizar('presente para alguém'), 'Outros')
     assert.strictEqual(categorizar(''), 'Outros')
 })
+
+test('uber eats cai em Alimentação, não Transporte', () => {
+    assert.strictEqual(categorizar('uber eats'), 'Alimentação')
+    assert.strictEqual(categorizar('pedido no ifood'), 'Alimentação')
+})

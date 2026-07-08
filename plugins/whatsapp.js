@@ -7,6 +7,9 @@ const { categorizar } = require('../lib/categorizar')
 
 module.exports = fp(async function (fastify, opts) {
 
+    // Referência ao socket ativo, usada por fastify.whatsapp.enviarMensagem (ex: envio de PIN de login)
+    let sockAtual = null
+
     async function connectToWhatsApp() {
         const { state, saveCreds } = await useMultiFileAuthState('auth_info')
 
@@ -48,9 +51,11 @@ module.exports = fp(async function (fastify, opts) {
             if (qr) qrcode.generate(qr, { small: true })
 
             if (connection === 'close') {
+                sockAtual = null
                 const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut
                 if (shouldReconnect) connectToWhatsApp()
             } else if (connection === 'open') {
+                sockAtual = sock
                 fastify.log.info('✅ WhatsApp Bot conectado e operando!')
             }
         })
@@ -100,6 +105,16 @@ module.exports = fp(async function (fastify, opts) {
             }
         })
     }
+
+    // Permite que rotas enviem mensagens pelo bot (ex: PIN de login) sem acessar o socket diretamente
+    fastify.decorate('whatsapp', {
+        enviarMensagem: async (telefone, texto) => {
+            if (!sockAtual) {
+                throw new Error('WhatsApp não está conectado no momento.')
+            }
+            await sockAtual.sendMessage(`${telefone}@s.whatsapp.net`, { text: texto })
+        }
+    })
 
     // Não conecta ao WhatsApp de verdade durante os testes automatizados
     if (process.env.NODE_ENV !== 'test') {
