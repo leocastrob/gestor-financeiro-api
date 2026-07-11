@@ -65,3 +65,6 @@ auth_info/
 
 # Backups locais do banco (gerados por scripts/backup.sh)
 backups/
+
+# Worktree isolado para execução de planos (superpowers:using-git-worktrees)
+.worktrees
