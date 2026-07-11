@@ -26,5 +26,15 @@ CREATE TABLE IF NOT EXISTS gastos (
 -- Índices em telefone/data aplicados em 2026-07-07 (produção já tinha só a PK).
 -- Consultas de routes/api/gastos/index.js filtram e ordenam por essas colunas.
 
+-- Tabela de metas (teto de gasto mensal por categoria), adicionada em 2026-07-11
+-- para a reforma de front-end. Upsert por (telefone, categoria) — ver
+-- routes/api/metas/index.js.
+CREATE TABLE IF NOT EXISTS metas (
+  telefone   VARCHAR(30)   NOT NULL,
+  categoria  VARCHAR(50)   NOT NULL,
+  valor_teto DECIMAL(10,2) NOT NULL,
+  PRIMARY KEY (telefone, categoria)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
 -- Como recriar o banco do zero em outro ambiente/celular:
 --   mysql -u root -p < schema.sql
