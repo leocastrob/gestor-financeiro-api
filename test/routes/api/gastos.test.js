@@ -52,7 +52,7 @@ test('POST /api/gastos categoriza automaticamente quando a categoria não é inf
         chamada++
         if (chamada === 1) {
             assert.match(sql, /INSERT INTO gastos/)
-            assert.deepStrictEqual(params, ['5511999999999', 'mercado', 50, 'Alimentação'])
+            assert.deepStrictEqual(params, ['5511999999999', 'mercado', 50, 'Alimentação', 'despesa'])
             return [{ insertId: 42 }]
         }
         assert.match(sql, /SELECT \* FROM gastos WHERE id = \?/)
@@ -74,7 +74,7 @@ test('POST /api/gastos respeita a categoria informada manualmente', async (t) =>
 
     app.db.query = async (sql, params) => {
         if (/INSERT/.test(sql)) {
-            assert.deepStrictEqual(params, ['5511999999999', 'presente', 100, 'Lazer'])
+            assert.deepStrictEqual(params, ['5511999999999', 'presente', 100, 'Lazer', 'despesa'])
             return [{ insertId: 7 }]
         }
         return [[{ id: 7, telefone: '5511999999999', descricao: 'presente', valor: '100.00', categoria: 'Lazer' }]]
