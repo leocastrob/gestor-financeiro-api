@@ -89,8 +89,27 @@ ALTER TABLE gastos ADD UNIQUE KEY uq_telefone_ident_externo (telefone, identific
 -- ===== Feature 1 — Refino (2026-07-12) =====
 -- Aplicar apenas se perfis_importacao_csv já existia antes deste refino
 -- (instalação nova já sai correta pelo CREATE TABLE acima).
-ALTER TABLE perfis_importacao_csv ADD COLUMN coluna_identificador VARCHAR(50) DEFAULT NULL AFTER coluna_valor;
 ALTER TABLE perfis_importacao_csv DROP COLUMN separador_decimal;
+
+-- ===== Feature 3 — Contas Fixas Recorrentes (Próxima) =====
+CREATE TABLE IF NOT EXISTS contas_fixas (
+  id                    INT NOT NULL AUTO_INCREMENT,
+  telefone              VARCHAR(30)  NOT NULL,
+  descricao             VARCHAR(255) NOT NULL,
+  categoria             VARCHAR(50)  NOT NULL DEFAULT 'Moradia',
+  valor                 DECIMAL(10,2) NOT NULL,
+  dia_vencimento        TINYINT UNSIGNED NOT NULL,
+  dias_lembrete_antes   TINYINT UNSIGNED NOT NULL DEFAULT 3,
+  lancamento_automatico TINYINT(1) NOT NULL DEFAULT 0,
+  ativa                 TINYINT(1) NOT NULL DEFAULT 1,
+  criado_em             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_telefone_ativa (telefone, ativa)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+ALTER TABLE gastos ADD COLUMN conta_fixa_id INT NULL AFTER divida_id;
+ALTER TABLE gastos ADD CONSTRAINT fk_gastos_conta_fixa FOREIGN KEY (conta_fixa_id) REFERENCES contas_fixas(id) ON DELETE SET NULL;
+ALTER TABLE gastos ADD UNIQUE KEY uq_conta_fixa_competencia (conta_fixa_id, competencia);
 
 -- ===== Feature 2 — Dívidas parceladas (2026-07-12) =====
 -- `competencia` (CHAR(7), 'YYYY-MM') é reutilizada pela Feature 3 (Contas fixas) —
