@@ -6,7 +6,7 @@ module.exports = async function (fastify, opts) {
     // Rota para criar um gasto direto pelo portal (o WhatsApp continua sendo o outro caminho).
     // Se a categoria não vier informada, categoriza automaticamente (mesma lógica do bot).
     fastify.post('/', async function (request, reply) {
-        const { telefone, descricao, valor, categoria } = request.body || {}
+        const { telefone, descricao, valor, categoria, tipo } = request.body || {}
 
         if (!telefone) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório.' })
@@ -21,16 +21,19 @@ module.exports = async function (fastify, opts) {
             return reply.status(400).send({ erro: 'Valor precisa ser um número maior que zero.' })
         }
 
-        if (categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
+        const tipoFinal = tipo === 'receita' ? 'receita' : 'despesa'
+
+        // Valida categoria apenas para despesas; receitas aceitam qualquer categoria (YAGNI por ora)
+        if (tipoFinal === 'despesa' && categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
             return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
         }
 
-        const categoriaFinal = categoria || categorizar(descricao)
+        const categoriaFinal = categoria || (tipoFinal === 'despesa' ? categorizar(descricao) : 'Outros')
 
         try {
             const [resultado] = await fastify.db.query(
-                'INSERT INTO gastos (telefone, descricao, valor, categoria) VALUES (?, ?, ?, ?)',
-                [telefone, descricao.trim(), valorNumerico, categoriaFinal]
+                'INSERT INTO gastos (telefone, descricao, valor, categoria, tipo) VALUES (?, ?, ?, ?, ?)',
+                [telefone, descricao.trim(), valorNumerico, categoriaFinal, tipoFinal]
             )
             const [linhas] = await fastify.db.query('SELECT * FROM gastos WHERE id = ?', [resultado.insertId])
             return reply.status(201).send(linhas[0])
@@ -91,16 +94,21 @@ module.exports = async function (fastify, opts) {
         }
     })
 
-    // Rota para editar um gasto (descrição, categoria e/ou valor). Exige telefone do dono.
+    // Rota para editar um gasto (descrição, categoria, valor e/ou tipo). Exige telefone do dono.
     fastify.patch('/:id', async function (request, reply) {
         const { id } = request.params
-        const { telefone, descricao, categoria, valor } = request.body || {}
+        const { telefone, descricao, categoria, valor, tipo } = request.body || {}
 
         if (!telefone) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório para editar.' })
         }
 
-        if (categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
+        if (tipo !== undefined && !['despesa', 'receita'].includes(tipo)) {
+            return reply.status(400).send({ erro: 'Tipo inválido. Use "despesa" ou "receita".' })
+        }
+
+        // Valida categoria apenas para despesas
+        if (categoria !== undefined && (tipo === 'despesa' || tipo === undefined) && !CATEGORIAS_VALIDAS.includes(categoria)) {
             return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
         }
 
@@ -109,6 +117,7 @@ module.exports = async function (fastify, opts) {
         if (descricao !== undefined) { campos.push('descricao = ?'); valores.push(descricao) }
         if (categoria !== undefined) { campos.push('categoria = ?'); valores.push(categoria) }
         if (valor !== undefined) { campos.push('valor = ?'); valores.push(valor) }
+        if (tipo !== undefined) { campos.push('tipo = ?'); valores.push(tipo) }
 
         if (campos.length === 0) {
             return reply.status(400).send({ erro: 'Nenhum campo para atualizar.' })

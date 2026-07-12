@@ -38,3 +38,16 @@ CREATE TABLE IF NOT EXISTS metas (
 
 -- Como recriar o banco do zero em outro ambiente/celular:
 --   mysql -u root -p < schema.sql
+
+-- ===== Feature 4 — Receitas (2026-07-12) =====
+-- Estende gastos com o conceito de tipo (despesa/receita). Default 'despesa' garante
+-- retrocompatibilidade total: todos os lançamentos existentes passam a ser 'despesa' automaticamente.
+-- Não renomeamos a tabela para 'lançamentos' — risco alto de quebrar rotas em produção.
+--
+-- Para aplicar no servidor (sem senha):
+--   mysql -u root financas -e "ALTER TABLE gastos ADD COLUMN tipo ENUM('despesa','receita') NOT NULL DEFAULT 'despesa' AFTER categoria; ALTER TABLE gastos ADD KEY idx_telefone_tipo_data (telefone, tipo, data);"
+ALTER TABLE gastos
+  ADD COLUMN tipo ENUM('despesa','receita') NOT NULL DEFAULT 'despesa' AFTER categoria;
+
+ALTER TABLE gastos ADD KEY idx_telefone_tipo_data (telefone, tipo, data);
+

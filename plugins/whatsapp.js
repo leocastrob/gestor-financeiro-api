@@ -72,13 +72,18 @@ module.exports = fp(async function (fastify, opts) {
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text
 
             if (texto) {
-                const valorMatch = texto.match(/[\d.,]+/)
-                const descricao = texto.replace(/[\d.,]+/, '').trim()
+                // Prefixo "+" indica receita (ex: "+3000 salário"); sem ele → despesa (retrocompatível)
+                const isReceita = texto.trimStart().startsWith('+')
+                const textoLimpo = isReceita ? texto.trimStart().slice(1).trim() : texto
+                const tipo = isReceita ? 'receita' : 'despesa'
+
+                const valorMatch = textoLimpo.match(/[\d.,]+/)
+                const descricao = textoLimpo.replace(/[\d.,]+/, '').trim()
                 const valorBruto = valorMatch ? valorMatch[0] : null
 
                 if (valorBruto && descricao) {
                     const valorNumerico = parseFloat(valorBruto.replace(',', '.'))
-                    const categoria = categorizar(descricao)
+                    const categoria = isReceita ? 'Outros' : categorizar(descricao)
 
                     // Extrai o telefone real (do remoteJidAlt)
                     let telefone = identificador.split('@')[0]
@@ -89,13 +94,13 @@ module.exports = fp(async function (fastify, opts) {
                     }
 
                     try {
-                        // Usando o pool de conexões do Fastify (agora inclui a Categoria)
                         await fastify.db.query(
-                            'INSERT INTO gastos (telefone, descricao, valor, categoria) VALUES (?, ?, ?, ?)', 
-                            [telefone, descricao, valorNumerico, categoria]
+                            'INSERT INTO gastos (telefone, descricao, valor, categoria, tipo) VALUES (?, ?, ?, ?, ?)',
+                            [telefone, descricao, valorNumerico, categoria, tipo]
                         )
-                        await sock.sendMessage(enviarPara, { 
-                            text: `✅ Salvo!\n📱 Nº: ${telefone}\n🛒 Ref: ${descricao}\n🏷️ Cat: ${categoria}\n💰 Valor: R$ ${valorNumerico}` 
+                        const emoji = isReceita ? '💰 Receita' : '🛒 Gasto'
+                        await sock.sendMessage(enviarPara, {
+                            text: `✅ Salvo!\n📱 Nº: ${telefone}\n${emoji}: ${descricao}\n🏷️ Cat: ${categoria}\n💵 Valor: R$ ${valorNumerico}`
                         })
                     } catch (erro) {
                         fastify.log.error('Erro no DB:', erro)
