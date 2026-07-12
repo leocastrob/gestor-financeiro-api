@@ -51,3 +51,37 @@ ALTER TABLE gastos
 
 ALTER TABLE gastos ADD KEY idx_telefone_tipo_data (telefone, tipo, data);
 
+-- ===== Feature 1 — Extrato bancário (2026-07-12) =====
+-- Novas tabelas para log de importações e perfis de mapeamento CSV.
+-- Novas colunas em gastos para rastreabilidade e deduplicação.
+
+CREATE TABLE IF NOT EXISTS extratos_importados (
+  id                INT NOT NULL AUTO_INCREMENT,
+  telefone          VARCHAR(30)  NOT NULL,
+  formato           ENUM('OFX','CSV') NOT NULL,
+  nome_banco        VARCHAR(60)  DEFAULT NULL,
+  total_linhas      INT NOT NULL DEFAULT 0,
+  total_importadas  INT NOT NULL DEFAULT 0,
+  total_duplicadas  INT NOT NULL DEFAULT 0,
+  criado_em         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_telefone (telefone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+CREATE TABLE IF NOT EXISTS perfis_importacao_csv (
+  telefone             VARCHAR(30)  NOT NULL,
+  assinatura_cabecalho VARCHAR(64)  NOT NULL,
+  nome_banco           VARCHAR(60)  DEFAULT NULL,
+  coluna_data          VARCHAR(50)  NOT NULL,
+  coluna_descricao     VARCHAR(50)  NOT NULL,
+  coluna_valor         VARCHAR(50)  NOT NULL,
+  formato_data         VARCHAR(20)  NOT NULL,
+  separador_decimal    CHAR(1)      NOT NULL DEFAULT ',',
+  criado_em            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (telefone, assinatura_cabecalho)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+ALTER TABLE gastos ADD COLUMN identificador_externo VARCHAR(64) NULL AFTER data;
+ALTER TABLE gastos ADD COLUMN extrato_id INT NULL;
+ALTER TABLE gastos ADD CONSTRAINT fk_gastos_extrato FOREIGN KEY (extrato_id) REFERENCES extratos_importados(id) ON DELETE SET NULL;
+ALTER TABLE gastos ADD UNIQUE KEY uq_telefone_ident_externo (telefone, identificador_externo);
