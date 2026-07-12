@@ -91,3 +91,29 @@ ALTER TABLE gastos ADD UNIQUE KEY uq_telefone_ident_externo (telefone, identific
 -- (instalação nova já sai correta pelo CREATE TABLE acima).
 ALTER TABLE perfis_importacao_csv ADD COLUMN coluna_identificador VARCHAR(50) DEFAULT NULL AFTER coluna_valor;
 ALTER TABLE perfis_importacao_csv DROP COLUMN separador_decimal;
+
+-- ===== Feature 2 — Dívidas parceladas (2026-07-12) =====
+-- `competencia` (CHAR(7), 'YYYY-MM') é reutilizada pela Feature 3 (Contas fixas) —
+-- mesmo mecanismo de idempotência via UNIQUE KEY.
+--
+-- Para aplicar no servidor (sem senha):
+--   mysql -u root financas -e "CREATE TABLE IF NOT EXISTS dividas (id INT NOT NULL AUTO_INCREMENT, telefone VARCHAR(30) NOT NULL, descricao VARCHAR(255) NOT NULL, categoria VARCHAR(50) NOT NULL DEFAULT '"'"'Outros'"'"', valor_parcela DECIMAL(10,2) NOT NULL, total_parcelas SMALLINT UNSIGNED NOT NULL, data_primeira_parcela DATE NOT NULL, ativa TINYINT(1) NOT NULL DEFAULT 1, criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), KEY idx_telefone_ativa (telefone, ativa)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci; ALTER TABLE gastos ADD COLUMN divida_id INT NULL; ALTER TABLE gastos ADD CONSTRAINT fk_gastos_divida FOREIGN KEY (divida_id) REFERENCES dividas(id) ON DELETE SET NULL; ALTER TABLE gastos ADD COLUMN competencia CHAR(7) NULL; ALTER TABLE gastos ADD UNIQUE KEY uq_divida_competencia (divida_id, competencia);"
+
+CREATE TABLE IF NOT EXISTS dividas (
+  id                    INT NOT NULL AUTO_INCREMENT,
+  telefone              VARCHAR(30)  NOT NULL,
+  descricao             VARCHAR(255) NOT NULL,
+  categoria             VARCHAR(50)  NOT NULL DEFAULT 'Outros',
+  valor_parcela         DECIMAL(10,2) NOT NULL,
+  total_parcelas        SMALLINT UNSIGNED NOT NULL,
+  data_primeira_parcela DATE NOT NULL,
+  ativa                 TINYINT(1) NOT NULL DEFAULT 1,
+  criado_em             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_telefone_ativa (telefone, ativa)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+ALTER TABLE gastos ADD COLUMN divida_id INT NULL;
+ALTER TABLE gastos ADD CONSTRAINT fk_gastos_divida FOREIGN KEY (divida_id) REFERENCES dividas(id) ON DELETE SET NULL;
+ALTER TABLE gastos ADD COLUMN competencia CHAR(7) NULL;
+ALTER TABLE gastos ADD UNIQUE KEY uq_divida_competencia (divida_id, competencia);
