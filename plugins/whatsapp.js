@@ -72,6 +72,51 @@ module.exports = fp(async function (fastify, opts) {
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text
 
             if (texto) {
+                const textoL = texto.trim().toLowerCase()
+                
+                if (textoL.startsWith('confirmar ')) {
+                    const idConta = textoL.split(' ')[1]
+                    
+                    let telefone = identificador.split('@')[0]
+                    if (telefone.endsWith('@lid') && lidParaTelefone[telefone]) {
+                        telefone = lidParaTelefone[telefone]
+                    }
+
+                    if (!idConta || isNaN(Number(idConta))) {
+                        await sock.sendMessage(enviarPara, { text: `❌ ID da conta inválido.` })
+                        return
+                    }
+
+                    try {
+                        // Verifica se a conta existe e pertence ao telefone
+                        const [contas] = await fastify.db.query('SELECT telefone FROM contas_fixas WHERE id = ?', [idConta])
+                        if (contas.length === 0 || contas[0].telefone !== telefone) {
+                            await sock.sendMessage(enviarPara, { text: `❌ Conta não encontrada.` })
+                            return
+                        }
+
+                        const res = await fastify.inject({
+                            method: 'POST',
+                            url: `/api/contas-fixas/${idConta}/lancar`
+                        })
+
+                        const corpo = res.json()
+                        if (res.statusCode === 200) {
+                            if (corpo.jaLancada) {
+                                await sock.sendMessage(enviarPara, { text: `✅ Esta conta já havia sido lançada neste mês.` })
+                            } else {
+                                await sock.sendMessage(enviarPara, { text: `✅ Pagamento lançado com sucesso no Gestor!` })
+                            }
+                        } else {
+                            await sock.sendMessage(enviarPara, { text: `❌ Erro: ${corpo.erro}` })
+                        }
+                    } catch (erro) {
+                        fastify.log.error('Erro ao confirmar conta:', erro)
+                        await sock.sendMessage(enviarPara, { text: `❌ Erro interno ao confirmar conta.` })
+                    }
+                    return
+                }
+
                 // Prefixo "+" indica receita (ex: "+3000 salário"); sem ele → despesa (retrocompatível)
                 const isReceita = texto.trimStart().startsWith('+')
                 const textoLimpo = isReceita ? texto.trimStart().slice(1).trim() : texto

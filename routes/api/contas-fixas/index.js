@@ -216,5 +216,68 @@ module.exports = async function (fastify, opts) {
             fastify.log.error(erro)
             return reply.status(500).send({ erro: 'Falha ao lançar a conta fixa.' })
         }
+    // Notifica o vencimento da conta ou faz lançamento automático (chamado pelo cron)
+    fastify.post('/:id/notificar', async function (request, reply) {
+        const { id } = request.params
+
+        try {
+            const [contasEncontradas] = await fastify.db.query('SELECT * FROM contas_fixas WHERE id = ?', [id])
+            if (contasEncontradas.length === 0) {
+                return reply.status(404).send({ erro: 'Conta fixa não encontrada.' })
+            }
+            const conta = contasEncontradas[0]
+
+            if (!conta.ativa) {
+                return reply.status(400).send({ erro: 'Conta fixa está inativa.' })
+            }
+
+            const agora = new Date()
+            const competencia = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
+
+            // Se for automático, faz o insert já
+            if (conta.lancamento_automatico) {
+                let jaLancada = false
+                try {
+                    await fastify.db.query(
+                        'INSERT INTO gastos (telefone, descricao, valor, categoria, tipo, conta_fixa_id, competencia) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        [conta.telefone, conta.descricao, conta.valor, conta.categoria, 'despesa', id, competencia]
+                    )
+                } catch (erroInsercao) {
+                    if (erroInsercao.errno === 1062 || erroInsercao.code === 'ER_DUP_ENTRY') {
+                        jaLancada = true
+                    } else {
+                        throw erroInsercao
+                    }
+                }
+
+                if (!jaLancada) {
+                    try {
+                        await fastify.whatsapp.enviarMensagem(
+                            conta.telefone, 
+                            `✅ *Conta Fixa Lançada*\nSua conta *${conta.descricao}* (R$ ${conta.valor}) foi lançada automaticamente no sistema. (Vencimento: dia ${conta.dia_vencimento})`
+                        )
+                    } catch (erroWhatsapp) {
+                        fastify.log.warn(`Falha ao notificar lançamento automático da conta ${id}: ${erroWhatsapp.message}`)
+                    }
+                }
+                
+                return { sucesso: true, mensagem: 'Lançamento automático efetuado.', jaLancada }
+            } else {
+                // Notifica para aprovação manual
+                try {
+                    await fastify.whatsapp.enviarMensagem(
+                        conta.telefone, 
+                        `🔔 *Lembrete de Vencimento*\nSua conta *${conta.descricao}* de R$ ${conta.valor} vence dia ${conta.dia_vencimento}.\n\nResponda *confirmar ${id}* para lançar o pagamento no Gestor.`
+                    )
+                    return { sucesso: true, mensagem: 'Lembrete enviado.' }
+                } catch (erroWhatsapp) {
+                    fastify.log.warn(`Falha ao enviar lembrete da conta ${id}: ${erroWhatsapp.message}`)
+                    return reply.status(502).send({ erro: 'Falha ao enviar mensagem de lembrete pelo WhatsApp.' })
+                }
+            }
+        } catch (erro) {
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao processar notificação.' })
+        }
     })
 }
