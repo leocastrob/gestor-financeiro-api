@@ -180,4 +180,62 @@ module.exports = async function (fastify, opts) {
             return reply.status(500).send({ erro: 'Falha ao excluir a dívida.' })
         }
     })
+
+    // Lança a parcela do mês corrente para uma dívida (idempotente via UNIQUE KEY
+    // uq_divida_competencia). Também é o endpoint chamado pelo cron
+    // scripts/lancar-parcelas.js via HTTP — ver Architecture no topo do plano.
+    fastify.post('/:id/lancar-parcela', async function (request, reply) {
+        const { id } = request.params
+
+        try {
+            const [dividasEncontradas] = await fastify.db.query('SELECT * FROM dividas WHERE id = ?', [id])
+            if (dividasEncontradas.length === 0) {
+                return reply.status(404).send({ erro: 'Dívida não encontrada.' })
+            }
+            const divida = dividasEncontradas[0]
+
+            if (!divida.ativa) {
+                return reply.status(400).send({ erro: 'Dívida já está quitada.' })
+            }
+
+            const [parcelasLancadas] = await fastify.db.query('SELECT COUNT(*) AS total FROM gastos WHERE divida_id = ?', [id])
+            const parcelasPagas = parcelasLancadas[0].total
+            const parcelaAtual = parcelasPagas + 1
+
+            const agora = new Date()
+            const competencia = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
+            const descricaoParcela = `${divida.descricao} (parcela ${parcelaAtual}/${divida.total_parcelas})`
+
+            let jaLancada = false
+            try {
+                await fastify.db.query(
+                    'INSERT INTO gastos (telefone, descricao, valor, categoria, tipo, divida_id, competencia) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [divida.telefone, descricaoParcela, divida.valor_parcela, divida.categoria, 'despesa', id, competencia]
+                )
+            } catch (erroInsercao) {
+                if (erroInsercao.errno === 1062 || erroInsercao.code === 'ER_DUP_ENTRY') {
+                    jaLancada = true
+                } else {
+                    throw erroInsercao
+                }
+            }
+
+            const totalPagasAgora = jaLancada ? parcelasPagas : parcelaAtual
+            const quitada = totalPagasAgora >= divida.total_parcelas
+
+            if (quitada && divida.ativa) {
+                await fastify.db.query('UPDATE dividas SET ativa = 0 WHERE id = ?', [id])
+                try {
+                    await fastify.whatsapp.enviarMensagem(divida.telefone, `🎉 Dívida quitada: ${divida.descricao}!`)
+                } catch (erroWhatsapp) {
+                    fastify.log.warn(`Não foi possível notificar quitação da dívida ${id}: ${erroWhatsapp.message}`)
+                }
+            }
+
+            return { sucesso: true, jaLancada, quitada }
+        } catch (erro) {
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao lançar a parcela.' })
+        }
+    })
 }

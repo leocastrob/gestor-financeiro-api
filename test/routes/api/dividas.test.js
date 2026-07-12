@@ -203,3 +203,75 @@ test('DELETE /api/dividas/:id faz soft delete (ativa=0) quando já há parcela l
     assert.strictEqual(res.statusCode, 200)
     assert.match(res.json().mensagem, /inativa/)
 })
+
+test('POST /api/dividas/:id/lancar-parcela retorna 404 quando a dívida não existe', async (t) => {
+    const app = await build(t)
+    app.db.query = async () => [[]]
+    const res = await app.inject({ method: 'POST', url: '/api/dividas/1/lancar-parcela' })
+    assert.strictEqual(res.statusCode, 404)
+})
+
+test('POST /api/dividas/:id/lancar-parcela retorna 400 quando a dívida já está quitada', async (t) => {
+    const app = await build(t)
+    app.db.query = async () => [[{ id: 1, ativa: 0, telefone: '5511999999999', descricao: 'Geladeira', valor_parcela: '150.00', categoria: 'Outros', total_parcelas: 10 }]]
+    const res = await app.inject({ method: 'POST', url: '/api/dividas/1/lancar-parcela' })
+    assert.strictEqual(res.statusCode, 400)
+})
+
+test('POST /api/dividas/:id/lancar-parcela lança a parcela e retorna quitada=false quando ainda falta parcela', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async (sql, params) => {
+        chamada++
+        if (chamada === 1) {
+            assert.match(sql, /SELECT \* FROM dividas WHERE id = \?/)
+            return [[{ id: 1, ativa: 1, telefone: '5511999999999', descricao: 'Geladeira em 10x', valor_parcela: '150.00', categoria: 'Outros', total_parcelas: 10 }]]
+        }
+        if (chamada === 2) {
+            assert.match(sql, /SELECT COUNT\(\*\) AS total FROM gastos WHERE divida_id = \?/)
+            return [[{ total: 3 }]]
+        }
+        assert.match(sql, /INSERT INTO gastos/)
+        assert.strictEqual(params[1], 'Geladeira em 10x (parcela 4/10)')
+        assert.strictEqual(params[4], 'despesa')
+        return [{ insertId: 99 }]
+    }
+    const res = await app.inject({ method: 'POST', url: '/api/dividas/1/lancar-parcela' })
+    assert.strictEqual(res.statusCode, 200)
+    assert.deepStrictEqual(res.json(), { sucesso: true, jaLancada: false, quitada: false })
+})
+
+test('POST /api/dividas/:id/lancar-parcela é idempotente (ER_DUP_ENTRY vira jaLancada=true)', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async () => {
+        chamada++
+        if (chamada === 1) return [[{ id: 1, ativa: 1, telefone: '5511999999999', descricao: 'Geladeira', valor_parcela: '150.00', categoria: 'Outros', total_parcelas: 10 }]]
+        if (chamada === 2) return [[{ total: 3 }]]
+        const erro = new Error('Duplicate entry')
+        erro.code = 'ER_DUP_ENTRY'
+        throw erro
+    }
+    const res = await app.inject({ method: 'POST', url: '/api/dividas/1/lancar-parcela' })
+    assert.strictEqual(res.statusCode, 200)
+    assert.deepStrictEqual(res.json(), { sucesso: true, jaLancada: true, quitada: false })
+})
+
+test('POST /api/dividas/:id/lancar-parcela marca ativa=0 e tenta notificar quando quitada', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    let updateChamado = false
+    app.db.query = async (sql) => {
+        chamada++
+        if (chamada === 1) return [[{ id: 1, ativa: 1, telefone: '5511999999999', descricao: 'Geladeira', valor_parcela: '150.00', categoria: 'Outros', total_parcelas: 10 }]]
+        if (chamada === 2) return [[{ total: 9 }]]
+        if (chamada === 3) return [{ insertId: 100 }]
+        updateChamado = true
+        assert.match(sql, /UPDATE dividas SET ativa = 0 WHERE id = \?/)
+        return [{ affectedRows: 1 }]
+    }
+    const res = await app.inject({ method: 'POST', url: '/api/dividas/1/lancar-parcela' })
+    assert.strictEqual(res.statusCode, 200)
+    assert.deepStrictEqual(res.json(), { sucesso: true, jaLancada: false, quitada: true })
+    assert.strictEqual(updateChamado, true)
+})
