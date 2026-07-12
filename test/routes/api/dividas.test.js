@@ -24,12 +24,12 @@ test('POST /api/dividas exige descrição', async (t) => {
     assert.strictEqual(res.statusCode, 400)
 })
 
-test('POST /api/dividas rejeita categoria inválida', async (t) => {
+test('POST /api/dividas rejeita categoria maior que 50 caracteres', async (t) => {
     const app = await build(t)
     const res = await app.inject({
         method: 'POST',
         url: '/api/dividas',
-        payload: { telefone: '5511999999999', descricao: 'Geladeira em 10x', categoria: 'Categoria Inventada', valor_parcela: 150, total_parcelas: 10, data_primeira_parcela: '2026-08-01' }
+        payload: { telefone: '5511999999999', descricao: 'Geladeira em 10x', categoria: 'A'.repeat(51), valor_parcela: 150, total_parcelas: 10, data_primeira_parcela: '2026-08-01' }
     })
     assert.strictEqual(res.statusCode, 400)
 })

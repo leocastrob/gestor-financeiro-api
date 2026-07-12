@@ -33,13 +33,13 @@ test('POST /api/gastos exige valor maior que zero', async (t) => {
     assert.strictEqual(res.statusCode, 400)
 })
 
-test('POST /api/gastos rejeita categoria inválida', async (t) => {
+test('POST /api/gastos rejeita categoria maior que 50 caracteres', async (t) => {
     const app = await build(t)
 
     const res = await app.inject({
         method: 'POST',
         url: '/api/gastos',
-        payload: { telefone: '5511999999999', descricao: 'mercado', valor: 50, categoria: 'Categoria Inventada' }
+        payload: { telefone: '5511999999999', descricao: 'mercado', valor: 50, categoria: 'A'.repeat(51) }
     })
     assert.strictEqual(res.statusCode, 400)
 })
@@ -144,13 +144,13 @@ test('PATCH /api/gastos/:id exige telefone no corpo', async (t) => {
     assert.strictEqual(res.statusCode, 400)
 })
 
-test('PATCH /api/gastos/:id rejeita categoria inválida', async (t) => {
+test('PATCH /api/gastos/:id rejeita categoria maior que 50 caracteres', async (t) => {
     const app = await build(t)
 
     const res = await app.inject({
         method: 'PATCH',
         url: '/api/gastos/1',
-        payload: { telefone: '5511999999999', categoria: 'Categoria Inventada' }
+        payload: { telefone: '5511999999999', categoria: 'A'.repeat(51) }
     })
     assert.strictEqual(res.statusCode, 400)
 })

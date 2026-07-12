@@ -1,6 +1,6 @@
 'use strict'
 
-const { CATEGORIAS_VALIDAS } = require('../../../lib/categorizar')
+// Removido CATEGORIAS_VALIDAS para suportar Feature 6
 
 module.exports = async function (fastify, opts) {
     // Lista as metas (tetos por categoria) de um telefone
@@ -24,8 +24,8 @@ module.exports = async function (fastify, opts) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório.' })
         }
 
-        if (!categoria || !CATEGORIAS_VALIDAS.includes(categoria)) {
-            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        if (!categoria || categoria.length > 50) {
+            return reply.status(400).send({ erro: 'Categoria inválida ou muito longa.' })
         }
 
         const valorNumerico = Number(valorTeto)

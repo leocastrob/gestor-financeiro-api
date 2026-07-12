@@ -111,6 +111,18 @@ ALTER TABLE gastos ADD COLUMN conta_fixa_id INT NULL AFTER divida_id;
 ALTER TABLE gastos ADD CONSTRAINT fk_gastos_conta_fixa FOREIGN KEY (conta_fixa_id) REFERENCES contas_fixas(id) ON DELETE SET NULL;
 ALTER TABLE gastos ADD UNIQUE KEY uq_conta_fixa_competencia (conta_fixa_id, competencia);
 
+CREATE TABLE IF NOT EXISTS categorias_personalizadas (
+  id          INT NOT NULL AUTO_INCREMENT,
+  telefone    VARCHAR(30)  NOT NULL,
+  nome        VARCHAR(50)  NOT NULL,
+  icone       VARCHAR(10)  NOT NULL DEFAULT '🏷️',
+  tipo        ENUM('despesa', 'receita') NOT NULL DEFAULT 'despesa',
+  criado_em   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_telefone_nome (telefone, nome)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+
+
 -- ===== Feature 2 — Dívidas parceladas (2026-07-12) =====
 -- `competencia` (CHAR(7), 'YYYY-MM') é reutilizada pela Feature 3 (Contas fixas) —
 -- mesmo mecanismo de idempotência via UNIQUE KEY.

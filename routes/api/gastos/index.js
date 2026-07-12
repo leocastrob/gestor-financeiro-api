@@ -1,6 +1,6 @@
 'use strict'
 
-const { categorizar, CATEGORIAS_VALIDAS } = require('../../../lib/categorizar')
+const { categorizar } = require('../../../lib/categorizar')
 
 module.exports = async function (fastify, opts) {
     // Rota para criar um gasto direto pelo portal (o WhatsApp continua sendo o outro caminho).
@@ -24,8 +24,8 @@ module.exports = async function (fastify, opts) {
         const tipoFinal = tipo === 'receita' ? 'receita' : 'despesa'
 
         // Valida categoria apenas para despesas; receitas aceitam qualquer categoria (YAGNI por ora)
-        if (tipoFinal === 'despesa' && categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
-            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        if (categoria !== undefined && categoria.length > 50) {
+            return reply.status(400).send({ erro: 'Categoria muito longa. Máximo 50 caracteres.' })
         }
 
         const categoriaFinal = categoria || (tipoFinal === 'despesa' ? categorizar(descricao) : 'Outros')
@@ -108,8 +108,8 @@ module.exports = async function (fastify, opts) {
         }
 
         // Valida categoria apenas para despesas
-        if (categoria !== undefined && (tipo === 'despesa' || tipo === undefined) && !CATEGORIAS_VALIDAS.includes(categoria)) {
-            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        if (categoria !== undefined && categoria.length > 50) {
+            return reply.status(400).send({ erro: 'Categoria muito longa. Máximo 50 caracteres.' })
         }
 
         const campos = []

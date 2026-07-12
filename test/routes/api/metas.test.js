@@ -29,13 +29,13 @@ test('PUT /api/metas exige telefone', async (t) => {
     assert.strictEqual(res.statusCode, 400)
 })
 
-test('PUT /api/metas rejeita categoria inválida', async (t) => {
+test('PUT /api/metas rejeita categoria maior que 50 caracteres', async (t) => {
     const app = await build(t)
 
     const res = await app.inject({
         method: 'PUT',
         url: '/api/metas',
-        payload: { telefone: '5511999999999', categoria: 'Categoria Inventada', valor_teto: 800 }
+        payload: { telefone: '5511999999999', categoria: 'A'.repeat(51), valor_teto: 800 }
     })
     assert.strictEqual(res.statusCode, 400)
 })

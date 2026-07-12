@@ -1,6 +1,6 @@
 'use strict'
 
-const { CATEGORIAS_VALIDAS } = require('../../../lib/categorizar')
+// Removido CATEGORIAS_VALIDAS para suportar Feature 6
 
 module.exports = async function (fastify, opts) {
     // Cria uma conta fixa
@@ -24,8 +24,8 @@ module.exports = async function (fastify, opts) {
         }
 
         const categoriaFinal = categoria || 'Moradia'
-        if (!CATEGORIAS_VALIDAS.includes(categoriaFinal)) {
-            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        if (categoriaFinal.length > 50) {
+            return reply.status(400).send({ erro: 'Categoria muito longa. Máximo 50 caracteres.' })
         }
 
         const valorNumerico = Number(valor)
@@ -105,8 +105,8 @@ module.exports = async function (fastify, opts) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório para editar.' })
         }
 
-        if (categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
-            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        if (categoria !== undefined && categoria.length > 50) {
+            return reply.status(400).send({ erro: 'Categoria muito longa. Máximo 50 caracteres.' })
         }
 
         try {
