@@ -51,6 +51,53 @@ module.exports = async function (fastify, opts) {
         }
     })
 
+    // Edita uma categoria personalizada (nome e/ou ícone)
+    fastify.patch('/:id', async function (request, reply) {
+        const { id } = request.params
+        const { telefone, nome, icone } = request.body || {}
+
+        if (!telefone) {
+            return reply.status(400).send({ erro: 'Telefone é obrigatório para editar.' })
+        }
+
+        if (nome !== undefined && (!nome.trim() || nome.trim().length > 50)) {
+            return reply.status(400).send({ erro: 'Nome da categoria inválido. Máximo 50 caracteres.' })
+        }
+
+        try {
+            const [encontradas] = await fastify.db.query(
+                'SELECT id FROM categorias_personalizadas WHERE id = ? AND telefone = ?',
+                [id, telefone]
+            )
+            if (encontradas.length === 0) {
+                return reply.status(404).send({ erro: 'Categoria não encontrada ou não pertence a este número.' })
+            }
+
+            const campos = []
+            const valores = []
+            if (nome !== undefined) { campos.push('nome = ?'); valores.push(nome.trim()) }
+            if (icone !== undefined) { campos.push('icone = ?'); valores.push((icone.trim() || '🏷️').substring(0, 10)) }
+
+            if (campos.length === 0) {
+                return reply.status(400).send({ erro: 'Nenhum campo para atualizar.' })
+            }
+
+            await fastify.db.query(
+                `UPDATE categorias_personalizadas SET ${campos.join(', ')} WHERE id = ? AND telefone = ?`,
+                [...valores, id, telefone]
+            )
+
+            const [linhas] = await fastify.db.query('SELECT * FROM categorias_personalizadas WHERE id = ?', [id])
+            return linhas[0]
+        } catch (erro) {
+            if (erro.errno === 1062 || erro.code === 'ER_DUP_ENTRY') {
+                return reply.status(409).send({ erro: 'Você já possui uma categoria com esse nome.' })
+            }
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao editar a categoria.' })
+        }
+    })
+
     // Remove uma categoria personalizada
     fastify.delete('/:id', async function (request, reply) {
         const { id } = request.params

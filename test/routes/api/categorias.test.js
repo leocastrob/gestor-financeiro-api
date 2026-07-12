@@ -66,6 +66,75 @@ test('POST /api/categorias rejeita nome duplicado', async (t) => {
     assert.strictEqual(res.statusCode, 409)
 })
 
+test('PATCH /api/categorias/:id exige telefone', async (t) => {
+    const app = await build(t)
+    const res = await app.inject({ method: 'PATCH', url: '/api/categorias/1', payload: { nome: 'Pets' } })
+    assert.strictEqual(res.statusCode, 400)
+})
+
+test('PATCH /api/categorias/:id rejeita nome vazio', async (t) => {
+    const app = await build(t)
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/categorias/1',
+        payload: { telefone: '5511999999999', nome: '   ' }
+    })
+    assert.strictEqual(res.statusCode, 400)
+})
+
+test('PATCH /api/categorias/:id retorna 404 se não encontrar', async (t) => {
+    const app = await build(t)
+    app.db.query = async () => [[]]
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/categorias/1',
+        payload: { telefone: '5511999999999', nome: 'Pets' }
+    })
+    assert.strictEqual(res.statusCode, 404)
+})
+
+test('PATCH /api/categorias/:id edita com sucesso', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async (sql) => {
+        chamada++
+        if (chamada === 1) {
+            assert.match(sql, /SELECT id FROM categorias_personalizadas WHERE id = \? AND telefone = \?/)
+            return [[{ id: 1 }]]
+        }
+        if (chamada === 2) {
+            assert.match(sql, /UPDATE categorias_personalizadas SET nome = \?, icone = \?/)
+            return [{}]
+        }
+        return [[{ id: 1, telefone: '5511999999999', nome: 'Pets', icone: '🐶', tipo: 'despesa' }]]
+    }
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/categorias/1',
+        payload: { telefone: '5511999999999', nome: 'Pets', icone: '🐶' }
+    })
+    assert.strictEqual(res.statusCode, 200)
+    assert.strictEqual(res.json().nome, 'Pets')
+})
+
+test('PATCH /api/categorias/:id rejeita nome duplicado', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async () => {
+        chamada++
+        if (chamada === 1) return [[{ id: 1 }]]
+        const erro = new Error('Duplicate entry')
+        erro.code = 'ER_DUP_ENTRY'
+        throw erro
+    }
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/categorias/1',
+        payload: { telefone: '5511999999999', nome: 'Pensão' }
+    })
+    assert.strictEqual(res.statusCode, 409)
+})
+
 test('GET /api/categorias/:telefone lista com sucesso', async (t) => {
     const app = await build(t)
     app.db.query = async (sql, params) => {
