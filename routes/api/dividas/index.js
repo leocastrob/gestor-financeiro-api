@@ -77,4 +77,107 @@ module.exports = async function (fastify, opts) {
             return reply.status(500).send({ erro: 'Falha ao buscar dívidas.' })
         }
     })
+
+    // Edita uma dívida. Bloqueia total_parcelas/data_primeira_parcela quando já há
+    // parcela lançada (COUNT(*) > 0) — permite editar descricao/categoria/valor_parcela
+    // sempre. Editar valor_parcela não retroage parcelas já lançadas (comportamento
+    // esperado, documentar na UI).
+    fastify.patch('/:id', async function (request, reply) {
+        const { id } = request.params
+        const {
+            telefone,
+            descricao,
+            categoria,
+            valor_parcela: valorParcela,
+            total_parcelas: totalParcelas,
+            data_primeira_parcela: dataPrimeiraParcela,
+        } = request.body || {}
+
+        if (!telefone) {
+            return reply.status(400).send({ erro: 'Telefone é obrigatório para editar.' })
+        }
+
+        if (categoria !== undefined && !CATEGORIAS_VALIDAS.includes(categoria)) {
+            return reply.status(400).send({ erro: `Categoria inválida. Use uma de: ${CATEGORIAS_VALIDAS.join(', ')}.` })
+        }
+
+        try {
+            const [dividasEncontradas] = await fastify.db.query(
+                'SELECT id FROM dividas WHERE id = ? AND telefone = ?',
+                [id, telefone]
+            )
+            if (dividasEncontradas.length === 0) {
+                return reply.status(404).send({ erro: 'Dívida não encontrada ou não pertence a este número.' })
+            }
+
+            const [parcelasLancadas] = await fastify.db.query(
+                'SELECT COUNT(*) AS total FROM gastos WHERE divida_id = ?',
+                [id]
+            )
+            const jaTemParcelaLancada = parcelasLancadas[0].total > 0
+
+            if (jaTemParcelaLancada && (totalParcelas !== undefined || dataPrimeiraParcela !== undefined)) {
+                return reply.status(400).send({ erro: 'Não é possível alterar total_parcelas ou data_primeira_parcela depois que já há parcela lançada.' })
+            }
+
+            const campos = []
+            const valores = []
+            if (descricao !== undefined) { campos.push('descricao = ?'); valores.push(descricao) }
+            if (categoria !== undefined) { campos.push('categoria = ?'); valores.push(categoria) }
+            if (valorParcela !== undefined) { campos.push('valor_parcela = ?'); valores.push(Number(valorParcela)) }
+            if (totalParcelas !== undefined) { campos.push('total_parcelas = ?'); valores.push(Number(totalParcelas)) }
+            if (dataPrimeiraParcela !== undefined) { campos.push('data_primeira_parcela = ?'); valores.push(dataPrimeiraParcela) }
+
+            if (campos.length === 0) {
+                return reply.status(400).send({ erro: 'Nenhum campo para atualizar.' })
+            }
+
+            await fastify.db.query(
+                `UPDATE dividas SET ${campos.join(', ')} WHERE id = ? AND telefone = ?`,
+                [...valores, id, telefone]
+            )
+
+            return { sucesso: true, mensagem: 'Dívida atualizada com sucesso.' }
+        } catch (erro) {
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao atualizar a dívida.' })
+        }
+    })
+
+    // Remove uma dívida: hard delete só se ainda não houver parcela lançada;
+    // senão soft-delete (ativa=0), preservando o histórico em gastos (ON DELETE SET NULL).
+    fastify.delete('/:id', async function (request, reply) {
+        const { id } = request.params
+        const { telefone } = request.body || {}
+
+        if (!telefone) {
+            return reply.status(400).send({ erro: 'Telefone é obrigatório para excluir.' })
+        }
+
+        try {
+            const [dividasEncontradas] = await fastify.db.query(
+                'SELECT id FROM dividas WHERE id = ? AND telefone = ?',
+                [id, telefone]
+            )
+            if (dividasEncontradas.length === 0) {
+                return reply.status(404).send({ erro: 'Dívida não encontrada ou não pertence a este número.' })
+            }
+
+            const [parcelasLancadas] = await fastify.db.query(
+                'SELECT COUNT(*) AS total FROM gastos WHERE divida_id = ?',
+                [id]
+            )
+
+            if (parcelasLancadas[0].total > 0) {
+                await fastify.db.query('UPDATE dividas SET ativa = 0 WHERE id = ?', [id])
+                return { sucesso: true, mensagem: 'Dívida com parcelas lançadas: marcada como inativa (histórico preservado).' }
+            }
+
+            await fastify.db.query('DELETE FROM dividas WHERE id = ?', [id])
+            return { sucesso: true, mensagem: 'Dívida excluída com sucesso.' }
+        } catch (erro) {
+            fastify.log.error(erro)
+            return reply.status(500).send({ erro: 'Falha ao excluir a dívida.' })
+        }
+    })
 }

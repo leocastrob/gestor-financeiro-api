@@ -98,3 +98,108 @@ test('GET /api/dividas/:telefone retorna as dívidas com parcelas_pagas calculad
     assert.strictEqual(res.statusCode, 200)
     assert.strictEqual(res.json()[0].parcelas_pagas, 3)
 })
+
+test('PATCH /api/dividas/:id exige telefone', async (t) => {
+    const app = await build(t)
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/dividas/1',
+        payload: { descricao: 'Nova descrição' }
+    })
+    assert.strictEqual(res.statusCode, 400)
+})
+
+test('PATCH /api/dividas/:id retorna 404 quando a dívida não pertence ao telefone', async (t) => {
+    const app = await build(t)
+    app.db.query = async () => [[]]
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/dividas/1',
+        payload: { telefone: '5511999999999', descricao: 'Nova descrição' }
+    })
+    assert.strictEqual(res.statusCode, 404)
+})
+
+test('PATCH /api/dividas/:id bloqueia total_parcelas/data_primeira_parcela quando já há parcela lançada', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async (sql) => {
+        chamada++
+        if (chamada === 1) {
+            assert.match(sql, /SELECT id FROM dividas WHERE id = \? AND telefone = \?/)
+            return [[{ id: 1 }]]
+        }
+        assert.match(sql, /SELECT COUNT\(\*\) AS total FROM gastos WHERE divida_id = \?/)
+        return [[{ total: 3 }]]
+    }
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/dividas/1',
+        payload: { telefone: '5511999999999', total_parcelas: 20 }
+    })
+    assert.strictEqual(res.statusCode, 400)
+})
+
+test('PATCH /api/dividas/:id permite editar valor_parcela mesmo com parcelas já lançadas', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async (sql, params) => {
+        chamada++
+        if (chamada === 1) return [[{ id: 1 }]]
+        if (chamada === 2) return [[{ total: 3 }]]
+        assert.match(sql, /UPDATE dividas SET valor_parcela = \? WHERE id = \? AND telefone = \?/)
+        assert.deepStrictEqual(params, [200, '1', '5511999999999'])
+        return [{ affectedRows: 1 }]
+    }
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/dividas/1',
+        payload: { telefone: '5511999999999', valor_parcela: 200 }
+    })
+    assert.strictEqual(res.statusCode, 200)
+    assert.strictEqual(res.json().sucesso, true)
+})
+
+test('DELETE /api/dividas/:id exige telefone', async (t) => {
+    const app = await build(t)
+    const res = await app.inject({ method: 'DELETE', url: '/api/dividas/1', payload: {} })
+    assert.strictEqual(res.statusCode, 400)
+})
+
+test('DELETE /api/dividas/:id faz hard delete quando não há parcela lançada', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async (sql) => {
+        chamada++
+        if (chamada === 1) return [[{ id: 1 }]]
+        if (chamada === 2) return [[{ total: 0 }]]
+        assert.match(sql, /DELETE FROM dividas WHERE id = \?/)
+        return [{ affectedRows: 1 }]
+    }
+    const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/dividas/1',
+        payload: { telefone: '5511999999999' }
+    })
+    assert.strictEqual(res.statusCode, 200)
+    assert.match(res.json().mensagem, /excluída/)
+})
+
+test('DELETE /api/dividas/:id faz soft delete (ativa=0) quando já há parcela lançada', async (t) => {
+    const app = await build(t)
+    let chamada = 0
+    app.db.query = async (sql) => {
+        chamada++
+        if (chamada === 1) return [[{ id: 1 }]]
+        if (chamada === 2) return [[{ total: 4 }]]
+        assert.match(sql, /UPDATE dividas SET ativa = 0 WHERE id = \?/)
+        return [{ affectedRows: 1 }]
+    }
+    const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/dividas/1',
+        payload: { telefone: '5511999999999' }
+    })
+    assert.strictEqual(res.statusCode, 200)
+    assert.match(res.json().mensagem, /inativa/)
+})
