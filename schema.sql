@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS perfis_importacao_csv (
   coluna_data          VARCHAR(50)  NOT NULL,
   coluna_descricao     VARCHAR(50)  NOT NULL,
   coluna_valor         VARCHAR(50)  NOT NULL,
+  coluna_identificador VARCHAR(50)  DEFAULT NULL,
   formato_data         VARCHAR(20)  NOT NULL,
-  separador_decimal    CHAR(1)      NOT NULL DEFAULT ',',
   criado_em            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (telefone, assinatura_cabecalho)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
@@ -85,3 +85,9 @@ ALTER TABLE gastos ADD COLUMN identificador_externo VARCHAR(64) NULL AFTER data;
 ALTER TABLE gastos ADD COLUMN extrato_id INT NULL;
 ALTER TABLE gastos ADD CONSTRAINT fk_gastos_extrato FOREIGN KEY (extrato_id) REFERENCES extratos_importados(id) ON DELETE SET NULL;
 ALTER TABLE gastos ADD UNIQUE KEY uq_telefone_ident_externo (telefone, identificador_externo);
+
+-- ===== Feature 1 — Refino (2026-07-12) =====
+-- Aplicar apenas se perfis_importacao_csv já existia antes deste refino
+-- (instalação nova já sai correta pelo CREATE TABLE acima).
+ALTER TABLE perfis_importacao_csv ADD COLUMN coluna_identificador VARCHAR(50) DEFAULT NULL AFTER coluna_valor;
+ALTER TABLE perfis_importacao_csv DROP COLUMN separador_decimal;

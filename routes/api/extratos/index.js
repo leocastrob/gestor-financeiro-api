@@ -3,7 +3,7 @@
 const { parsearOFX } = require('../../../lib/parsers/ofx')
 const { parsearCSV, hashCabecalho, aplicarMapeamento } = require('../../../lib/parsers/csv')
 const { gerarIdentificadorExterno, sanitizarDescricao } = require('../../../lib/extrato-utils')
-const { categorizar } = require('../../../lib/categorizar')
+const { categorizar, REGEX_INVESTIMENTO_RDB } = require('../../../lib/categorizar')
 
 module.exports = async function (fastify, opts) {
 
@@ -67,8 +67,8 @@ module.exports = async function (fastify, opts) {
                     colunaData: perfil.coluna_data,
                     colunaDescricao: perfil.coluna_descricao,
                     colunaValor: perfil.coluna_valor,
+                    colunaIdentificador: perfil.coluna_identificador,
                     formatoData: perfil.formato_data,
-                    separadorDecimal: perfil.separador_decimal,
                 })
                 return {
                     formato: 'CSV',
@@ -157,8 +157,8 @@ module.exports = async function (fastify, opts) {
                         colunaData: perfis[0].coluna_data,
                         colunaDescricao: perfis[0].coluna_descricao,
                         colunaValor: perfis[0].coluna_valor,
+                        colunaIdentificador: perfis[0].coluna_identificador,
                         formatoData: perfis[0].formato_data,
-                        separadorDecimal: perfis[0].separador_decimal,
                     }
                     nomeBanco = perfis[0].nome_banco
                 } else if (mapeamento) {
@@ -170,24 +170,24 @@ module.exports = async function (fastify, opts) {
                         colunaData: mapeamento.colunaData,
                         colunaDescricao: mapeamento.colunaDescricao,
                         colunaValor: mapeamento.colunaValor,
+                        colunaIdentificador: mapeamento.colunaIdentificador || null,
                         formatoData: mapeamento.formatoData || 'DD/MM/YYYY',
-                        separadorDecimal: mapeamento.separadorDecimal || ',',
                     }
                     nomeBanco = mapeamento.nomeBanco || null
 
                     // Salva o perfil para futuras importações
                     await fastify.db.query(
                         `INSERT INTO perfis_importacao_csv
-                            (telefone, assinatura_cabecalho, nome_banco, coluna_data, coluna_descricao, coluna_valor, formato_data, separador_decimal)
+                            (telefone, assinatura_cabecalho, nome_banco, coluna_data, coluna_descricao, coluna_valor, coluna_identificador, formato_data)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                          ON DUPLICATE KEY UPDATE
                             nome_banco = VALUES(nome_banco),
                             coluna_data = VALUES(coluna_data),
                             coluna_descricao = VALUES(coluna_descricao),
                             coluna_valor = VALUES(coluna_valor),
-                            formato_data = VALUES(formato_data),
-                            separador_decimal = VALUES(separador_decimal)`,
-                        [telefone, assinatura, nomeBanco, perfilFinal.colunaData, perfilFinal.colunaDescricao, perfilFinal.colunaValor, perfilFinal.formatoData, perfilFinal.separadorDecimal]
+                            coluna_identificador = VALUES(coluna_identificador),
+                            formato_data = VALUES(formato_data)`,
+                        [telefone, assinatura, nomeBanco, perfilFinal.colunaData, perfilFinal.colunaDescricao, perfilFinal.colunaValor, perfilFinal.colunaIdentificador, perfilFinal.formatoData]
                     )
                 } else {
                     return reply.status(400).send({ erro: 'CSV sem perfil salvo e sem mapeamento enviado.' })
@@ -211,7 +211,9 @@ module.exports = async function (fastify, opts) {
             for (const t of transacoes) {
                 const identificadorExterno = gerarIdentificadorExterno(telefone, t)
                 const descSanitizada = sanitizarDescricao(t.descricao)
-                const categoria = t.tipo === 'despesa' ? categorizar(descSanitizada) : 'Outros'
+                const categoria = REGEX_INVESTIMENTO_RDB.test(descSanitizada)
+                    ? 'Investimentos'
+                    : (t.tipo === 'despesa' ? categorizar(descSanitizada) : 'Outros')
 
                 try {
                     await fastify.db.query(
