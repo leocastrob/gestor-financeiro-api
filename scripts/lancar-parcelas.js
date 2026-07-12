@@ -1,7 +1,7 @@
 'use strict'
 
-// Dispara o lançamento da parcela do mês corrente para toda dívida ativa que ainda
-// não tem parcela lançada nesta competência. Roda 1x/dia via PM2 cron-restart (mesmo
+// Dispara o lançamento da parcela do mês corrente para toda dívida ativa que chegou a sua
+// data_primeira_parcela e ainda não tem parcela lançada nesta competência. Roda 1x/dia via PM2 cron-restart (mesmo
 // padrão de scripts/backup.sh) — ver instruções de registro no fim deste arquivo.
 //
 // Decisão de arquitetura: este script NÃO grava direto em `gastos` nem chama o
@@ -40,6 +40,7 @@ async function main() {
             `SELECT d.id
              FROM dividas d
              WHERE d.ativa = 1
+               AND d.data_primeira_parcela <= CURDATE()
                AND NOT EXISTS (
                  SELECT 1 FROM gastos g WHERE g.divida_id = d.id AND g.competencia = ?
                )`,
