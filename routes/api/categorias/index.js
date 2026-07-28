@@ -1,5 +1,16 @@
 'use strict'
 
+// Só o formato é validado aqui; a paleta de 24 cores vive no frontend, que é
+// quem restringe a escolha. Uma cor fora da paleta ainda seria renderizável.
+const FORMATO_COR = /^#[0-9a-fA-F]{6}$/
+
+// Devolve { ok: true, cor } ou { ok: false }. Ausente/null/'' viram NULL.
+function resolverCor(valor) {
+    if (valor === undefined || valor === null || valor === '') return { ok: true, cor: null }
+    if (typeof valor !== 'string' || !FORMATO_COR.test(valor)) return { ok: false }
+    return { ok: true, cor: valor }
+}
+
 module.exports = async function (fastify, opts) {
     // Lista as categorias customizadas do usuário
     fastify.get('/:telefone', async function (request, reply) {
@@ -19,7 +30,7 @@ module.exports = async function (fastify, opts) {
 
     // Cria uma nova categoria personalizada
     fastify.post('/', async function (request, reply) {
-        const { telefone, nome, icone, tipo } = request.body || {}
+        const { telefone, nome, icone, tipo, cor } = request.body || {}
 
         if (!telefone) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório.' })
@@ -35,10 +46,15 @@ module.exports = async function (fastify, opts) {
         const iconeFinal = (icone && icone.trim()) ? icone.trim().substring(0, 10) : '🏷️'
         const tipoFinal = tipo === 'receita' ? 'receita' : 'despesa'
 
+        const corResolvida = resolverCor(cor)
+        if (!corResolvida.ok) {
+            return reply.status(400).send({ erro: 'Cor inválida. Use o formato #RRGGBB.' })
+        }
+
         try {
             const [resultado] = await fastify.db.query(
-                'INSERT INTO categorias_personalizadas (telefone, nome, icone, tipo) VALUES (?, ?, ?, ?)',
-                [telefone, nome.trim(), iconeFinal, tipoFinal]
+                'INSERT INTO categorias_personalizadas (telefone, nome, icone, tipo, cor) VALUES (?, ?, ?, ?, ?)',
+                [telefone, nome.trim(), iconeFinal, tipoFinal, corResolvida.cor]
             )
             const [linhas] = await fastify.db.query('SELECT * FROM categorias_personalizadas WHERE id = ?', [resultado.insertId])
             return reply.status(201).send(linhas[0])
@@ -54,7 +70,7 @@ module.exports = async function (fastify, opts) {
     // Edita uma categoria personalizada (nome e/ou ícone)
     fastify.patch('/:id', async function (request, reply) {
         const { id } = request.params
-        const { telefone, nome, icone } = request.body || {}
+        const { telefone, nome, icone, cor } = request.body || {}
 
         if (!telefone) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório para editar.' })
@@ -62,6 +78,14 @@ module.exports = async function (fastify, opts) {
 
         if (nome !== undefined && (!nome.trim() || nome.trim().length > 50)) {
             return reply.status(400).send({ erro: 'Nome da categoria inválido. Máximo 50 caracteres.' })
+        }
+
+        // hasOwnProperty distingue "campo ausente" (não mexe) de "cor: null"
+        // (volta para automática) — depois da desestruturação ambos são undefined.
+        const corInformada = Object.prototype.hasOwnProperty.call(request.body || {}, 'cor')
+        const corResolvida = resolverCor(cor)
+        if (corInformada && !corResolvida.ok) {
+            return reply.status(400).send({ erro: 'Cor inválida. Use o formato #RRGGBB.' })
         }
 
         try {
@@ -77,6 +101,7 @@ module.exports = async function (fastify, opts) {
             const valores = []
             if (nome !== undefined) { campos.push('nome = ?'); valores.push(nome.trim()) }
             if (icone !== undefined) { campos.push('icone = ?'); valores.push((icone.trim() || '🏷️').substring(0, 10)) }
+            if (corInformada) { campos.push('cor = ?'); valores.push(corResolvida.cor) }
 
             if (campos.length === 0) {
                 return reply.status(400).send({ erro: 'Nenhum campo para atualizar.' })
