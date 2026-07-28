@@ -1,12 +1,13 @@
 'use strict'
 
 const { categorizar } = require('../../../lib/categorizar')
+const { resolverDataLancamento } = require('../../../lib/data-lancamento')
 
 module.exports = async function (fastify, opts) {
     // Rota para criar um gasto direto pelo portal (o WhatsApp continua sendo o outro caminho).
     // Se a categoria não vier informada, categoriza automaticamente (mesma lógica do bot).
     fastify.post('/', async function (request, reply) {
-        const { telefone, descricao, valor, categoria, tipo } = request.body || {}
+        const { telefone, descricao, valor, categoria, tipo, data } = request.body || {}
 
         if (!telefone) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório.' })
@@ -30,10 +31,25 @@ module.exports = async function (fastify, opts) {
 
         const categoriaFinal = categoria || (tipoFinal === 'despesa' ? categorizar(descricao) : 'Outros')
 
+        const dataResolvida = resolverDataLancamento(data)
+        if (!dataResolvida.ok) {
+            return reply.status(400).send({ erro: dataResolvida.erro })
+        }
+
         try {
+            // A coluna `data` só entra no INSERT quando o cliente informou uma;
+            // ausente, o DEFAULT CURRENT_TIMESTAMP da tabela é quem resolve.
+            const colunas = ['telefone', 'descricao', 'valor', 'categoria', 'tipo']
+            const valores = [telefone, descricao.trim(), valorNumerico, categoriaFinal, tipoFinal]
+
+            if (dataResolvida.timestamp) {
+                colunas.push('data')
+                valores.push(dataResolvida.timestamp)
+            }
+
             const [resultado] = await fastify.db.query(
-                'INSERT INTO gastos (telefone, descricao, valor, categoria, tipo) VALUES (?, ?, ?, ?, ?)',
-                [telefone, descricao.trim(), valorNumerico, categoriaFinal, tipoFinal]
+                `INSERT INTO gastos (${colunas.join(', ')}) VALUES (${colunas.map(() => '?').join(', ')})`,
+                valores
             )
             const [linhas] = await fastify.db.query('SELECT * FROM gastos WHERE id = ?', [resultado.insertId])
             return reply.status(201).send(linhas[0])
@@ -97,7 +113,7 @@ module.exports = async function (fastify, opts) {
     // Rota para editar um gasto (descrição, categoria, valor e/ou tipo). Exige telefone do dono.
     fastify.patch('/:id', async function (request, reply) {
         const { id } = request.params
-        const { telefone, descricao, categoria, valor, tipo } = request.body || {}
+        const { telefone, descricao, categoria, valor, tipo, data } = request.body || {}
 
         if (!telefone) {
             return reply.status(400).send({ erro: 'Telefone é obrigatório para editar.' })
@@ -112,12 +128,18 @@ module.exports = async function (fastify, opts) {
             return reply.status(400).send({ erro: 'Categoria muito longa. Máximo 50 caracteres.' })
         }
 
+        const dataResolvida = resolverDataLancamento(data)
+        if (!dataResolvida.ok) {
+            return reply.status(400).send({ erro: dataResolvida.erro })
+        }
+
         const campos = []
         const valores = []
         if (descricao !== undefined) { campos.push('descricao = ?'); valores.push(descricao) }
         if (categoria !== undefined) { campos.push('categoria = ?'); valores.push(categoria) }
         if (valor !== undefined) { campos.push('valor = ?'); valores.push(valor) }
         if (tipo !== undefined) { campos.push('tipo = ?'); valores.push(tipo) }
+        if (dataResolvida.timestamp) { campos.push('data = ?'); valores.push(dataResolvida.timestamp) }
 
         if (campos.length === 0) {
             return reply.status(400).send({ erro: 'Nenhum campo para atualizar.' })

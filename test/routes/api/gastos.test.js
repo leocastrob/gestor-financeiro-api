@@ -185,3 +185,109 @@ test('PATCH /api/gastos/:id edita com sucesso', async (t) => {
     assert.strictEqual(res.statusCode, 200)
     assert.strictEqual(res.json().sucesso, true)
 })
+
+test('POST /api/gastos rejeita data no futuro', async (t) => {
+    const app = await build(t)
+
+    const res = await app.inject({
+        method: 'POST',
+        url: '/api/gastos',
+        payload: { telefone: '5511999999999', descricao: 'mercado', valor: 50, data: '2099-01-01' }
+    })
+    assert.strictEqual(res.statusCode, 400)
+    assert.strictEqual(res.json().erro, 'Data não pode ser futura.')
+})
+
+test('POST /api/gastos rejeita data com formato inválido', async (t) => {
+    const app = await build(t)
+
+    const res = await app.inject({
+        method: 'POST',
+        url: '/api/gastos',
+        payload: { telefone: '5511999999999', descricao: 'mercado', valor: 50, data: '10/07/2026' }
+    })
+    assert.strictEqual(res.statusCode, 400)
+    assert.strictEqual(res.json().erro, 'Data inválida. Use o formato AAAA-MM-DD.')
+})
+
+test('POST /api/gastos sem data não inclui a coluna no INSERT', async (t) => {
+    const app = await build(t)
+
+    app.db.query = async (sql, params) => {
+        if (/INSERT/.test(sql)) {
+            assert.doesNotMatch(sql, /\bdata\b/)
+            assert.strictEqual(params.length, 5)
+            return [{ insertId: 1 }]
+        }
+        return [[{ id: 1 }]]
+    }
+
+    const res = await app.inject({
+        method: 'POST',
+        url: '/api/gastos',
+        payload: { telefone: '5511999999999', descricao: 'mercado', valor: 50 }
+    })
+    assert.strictEqual(res.statusCode, 201)
+})
+
+test('POST /api/gastos com data passada grava meio-dia', async (t) => {
+    const app = await build(t)
+
+    app.db.query = async (sql, params) => {
+        if (/INSERT/.test(sql)) {
+            assert.match(sql, /INSERT INTO gastos \(telefone, descricao, valor, categoria, tipo, data\)/)
+            assert.deepStrictEqual(params, ['5511999999999', 'mercado', 50, 'Alimentação', 'despesa', '2020-03-15 12:00:00'])
+            return [{ insertId: 9 }]
+        }
+        return [[{ id: 9, descricao: 'mercado' }]]
+    }
+
+    const res = await app.inject({
+        method: 'POST',
+        url: '/api/gastos',
+        payload: { telefone: '5511999999999', descricao: 'mercado', valor: 50, data: '2020-03-15' }
+    })
+    assert.strictEqual(res.statusCode, 201)
+})
+
+test('PATCH /api/gastos/:id rejeita data no futuro', async (t) => {
+    const app = await build(t)
+
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/gastos/1',
+        payload: { telefone: '5511999999999', data: '2099-01-01' }
+    })
+    assert.strictEqual(res.statusCode, 400)
+    assert.strictEqual(res.json().erro, 'Data não pode ser futura.')
+})
+
+test('PATCH /api/gastos/:id rejeita data com formato inválido', async (t) => {
+    const app = await build(t)
+
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/gastos/1',
+        payload: { telefone: '5511999999999', data: '2026-02-31' }
+    })
+    assert.strictEqual(res.statusCode, 400)
+    assert.strictEqual(res.json().erro, 'Data inválida. Use o formato AAAA-MM-DD.')
+})
+
+test('PATCH /api/gastos/:id atualiza só a data quando é o único campo enviado', async (t) => {
+    const app = await build(t)
+
+    app.db.query = async (sql, params) => {
+        assert.match(sql, /UPDATE gastos SET data = \? WHERE id = \? AND telefone = \?/)
+        assert.deepStrictEqual(params, ['2020-03-15 12:00:00', '1', '5511999999999'])
+        return [{ affectedRows: 1 }]
+    }
+
+    const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/gastos/1',
+        payload: { telefone: '5511999999999', data: '2020-03-15' }
+    })
+    assert.strictEqual(res.statusCode, 200)
+    assert.strictEqual(res.json().sucesso, true)
+})
