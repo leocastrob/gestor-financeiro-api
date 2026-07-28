@@ -148,3 +148,9 @@ ALTER TABLE gastos ADD COLUMN divida_id INT NULL;
 ALTER TABLE gastos ADD CONSTRAINT fk_gastos_divida FOREIGN KEY (divida_id) REFERENCES dividas(id) ON DELETE SET NULL;
 ALTER TABLE gastos ADD COLUMN competencia CHAR(7) NULL;
 ALTER TABLE gastos ADD UNIQUE KEY uq_divida_competencia (divida_id, competencia);
+
+-- ===== Cor escolhível de categoria personalizada (2026-07-28) =====
+-- NULL = cor automática (hash do nome, ver theme/categorias.ts no frontend).
+-- Aplicado em produção manualmente, fora do deploy.sh:
+--   mysql -u root financas -e "ALTER TABLE categorias_personalizadas ADD COLUMN cor CHAR(7) NULL AFTER icone;"
+ALTER TABLE categorias_personalizadas ADD COLUMN cor CHAR(7) NULL AFTER icone;
