@@ -1,6 +1,6 @@
 'use strict'
 const fp = require('fastify-plugin')
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys')
 const qrcode = require('qrcode-terminal')
 const pino = require('pino')
 const { categorizar } = require('../lib/categorizar')
@@ -16,11 +16,31 @@ module.exports = fp(async function (fastify, opts) {
     let sockAtual = null
     let tentativasReconexao = 0
 
+    // O WhatsApp recusa cliente com versão de WhatsApp Web velha, e recusa com
+    // 405 "Connection Failure" antes de emitir QR Code — o que faz parecer sessão
+    // inválida quando na verdade é a versão embutida no Baileys que envelheceu.
+    // Buscar a versão atual em cada tentativa custa uma requisição e evita isso.
+    async function buscarVersaoWhatsApp() {
+        try {
+            const { version, isLatest } = await fetchLatestBaileysVersion()
+            fastify.log.info({ versao: version.join('.'), isLatest }, '📱 Versão do WhatsApp Web em uso')
+            return version
+        } catch (erro) {
+            fastify.log.warn(
+                { erro: erro.message },
+                '⚠️ Não deu pra buscar a versão do WhatsApp Web, caindo na versão embutida no Baileys'
+            )
+            return undefined
+        }
+    }
+
     async function connectToWhatsApp() {
         const { state, saveCreds } = await useMultiFileAuthState('auth_info')
+        const version = await buscarVersaoWhatsApp()
 
         const sock = makeWASocket({
             auth: state,
+            version,
             browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
             // 'silent' esconde a causa de queda de conexão. WA_LOG_LEVEL permite subir pra 'debug' quando precisa investigar.
             logger: pino({ level: process.env.WA_LOG_LEVEL || 'warn' })
