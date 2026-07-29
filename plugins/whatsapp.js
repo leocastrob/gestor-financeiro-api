@@ -5,10 +5,16 @@ const qrcode = require('qrcode-terminal')
 const pino = require('pino')
 const { categorizar } = require('../lib/categorizar')
 
+// Reconexão com espera crescente: 2s, 4s, 8s... até o teto de 60s.
+// Sem isso o reconnect vira um loop apertado que nunca aparece no log.
+const RECONEXAO_ESPERA_BASE_MS = 2000
+const RECONEXAO_ESPERA_MAX_MS = 60000
+
 module.exports = fp(async function (fastify, opts) {
 
     // Referência ao socket ativo, usada por fastify.whatsapp.enviarMensagem (ex: envio de PIN de login)
     let sockAtual = null
+    let tentativasReconexao = 0
 
     async function connectToWhatsApp() {
         const { state, saveCreds } = await useMultiFileAuthState('auth_info')
@@ -16,8 +22,13 @@ module.exports = fp(async function (fastify, opts) {
         const sock = makeWASocket({
             auth: state,
             browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
-            logger: pino({ level: 'silent' })
+            // 'silent' esconde a causa de queda de conexão. WA_LOG_LEVEL permite subir pra 'debug' quando precisa investigar.
+            logger: pino({ level: process.env.WA_LOG_LEVEL || 'warn' })
         })
+
+        // Um mesmo socket pode emitir 'close' mais de uma vez; sem essa trava cada
+        // emissão agendaria uma reconexão própria e elas se multiplicariam.
+        let closeJaTratado = false
 
         // Mapa que converte LID (Linked Identity) → número de telefone real
         // O Baileys v7 usa LID em vez do telefone em mensagens multi-device
@@ -52,10 +63,40 @@ module.exports = fp(async function (fastify, opts) {
 
             if (connection === 'close') {
                 sockAtual = null
-                const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut
-                if (shouldReconnect) connectToWhatsApp()
+                if (closeJaTratado) return
+                closeJaTratado = true
+
+                const statusCode = lastDisconnect?.error?.output?.statusCode
+                const motivo = lastDisconnect?.error?.message
+
+                // Libera os handlers do socket morto — sem isso cada reconexão acumula listeners
+                sock.ev.removeAllListeners()
+
+                if (statusCode === DisconnectReason.loggedOut) {
+                    fastify.log.error(
+                        { statusCode, motivo },
+                        '❌ WhatsApp desconectado: sessão encerrada (loggedOut). Apague auth_info/ e escaneie o QR Code de novo.'
+                    )
+                    return
+                }
+
+                tentativasReconexao += 1
+                const espera = Math.min(
+                    RECONEXAO_ESPERA_BASE_MS * 2 ** (tentativasReconexao - 1),
+                    RECONEXAO_ESPERA_MAX_MS
+                )
+                fastify.log.warn(
+                    { statusCode, motivo, tentativa: tentativasReconexao, esperaMs: espera },
+                    '⚠️ WhatsApp desconectou, reconectando'
+                )
+                setTimeout(() => {
+                    connectToWhatsApp().catch((erro) => {
+                        fastify.log.error({ erro: erro.message }, '❌ Falha ao reconectar no WhatsApp')
+                    })
+                }, espera).unref()
             } else if (connection === 'open') {
                 sockAtual = sock
+                tentativasReconexao = 0
                 fastify.log.info('✅ WhatsApp Bot conectado e operando!')
             }
         })
@@ -168,6 +209,8 @@ module.exports = fp(async function (fastify, opts) {
 
     // Não conecta ao WhatsApp de verdade durante os testes automatizados
     if (process.env.NODE_ENV !== 'test') {
-        connectToWhatsApp()
+        connectToWhatsApp().catch((erro) => {
+            fastify.log.error({ erro: erro.message }, '❌ Falha ao conectar no WhatsApp na inicialização')
+        })
     }
 })
